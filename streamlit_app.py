@@ -1,56 +1,47 @@
+# main.py
 import streamlit as st
-from openai import OpenAI
+from news_fetcher import fetch_guardian_news
+from sentiment_analysis import analyze_sentiment
+from stock_data import get_stock_data
+from correlation_predictor import correlate_and_predict
+from recommendation import generate_recommendation
+from utils import parse_date_range
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
-)
+st.set_page_config(page_title="Financial Advisor Chatbot")
+st.title("🧠 Financial Advisor Chatbot")
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+# Inputs
+keyword = st.text_input("Enter a keyword (e.g., Trump):")
+date_range = st.date_input("Select date range:", [])
+stock = st.text_input("Enter stock ticker (e.g., AAPL):", "")
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+if st.button("Fetch and Analyze") and keyword and date_range:
+    start_date, end_date = parse_date_range(date_range)
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    with st.spinner("Fetching news from Guardian API..."):
+        news_df = fetch_guardian_news(keyword, start_date, end_date)
+    if news_df.empty:
+        st.warning("No news articles found for the given keyword and date range.")
+    else:
+        st.success(f"Fetched {len(news_df)} articles.")
+        st.dataframe(news_df[['webTitle', 'webPublicationDate']])
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        with st.spinner("Analyzing sentiment..."):
+            sentiment_df = analyze_sentiment(news_df)
+        st.success("Sentiment analysis complete.")
+        st.dataframe(sentiment_df)
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
+        if stock:
+            with st.spinner("Fetching stock data..."):
+                stock_df = get_stock_data(stock, start_date, end_date)
+            st.line_chart(stock_df['Close'])
 
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+            with st.spinner("Analyzing correlation and predicting future prices..."):
+                correlation, prediction = correlate_and_predict(sentiment_df, stock_df)
+                st.metric("Sentiment-Price Correlation", f"{correlation:.2f}")
+                st.metric("Predicted Price (Next Week)", f"${prediction:.2f}")
 
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
-
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+                suggestion = generate_recommendation(correlation, prediction)
+                st.success(f"Investment Recommendation: {suggestion}")
+        else:
+            st.info("Please enter a stock ticker to continue analysis.")

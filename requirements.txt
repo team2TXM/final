@@ -1,2 +1,8 @@
 streamlit
-openai
+transformers
+torch
+pandas
+yfinance
+scikit-learn
+requests
+python-dotenv
