@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
 
+
+
 def correlate_and_predict(sentiment_df, stock_df):
     # Flatten MultiIndex columns in stock_df
     stock_df.columns = [
@@ -49,4 +51,6 @@ def correlate_and_predict(sentiment_df, stock_df):
     predicted_price = model.predict([[X.iloc[-1].values[0] + 1]])[0]
 
     return correlation, predicted_price
+
+
 
