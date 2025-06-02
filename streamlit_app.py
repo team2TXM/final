@@ -10,6 +10,8 @@ from correlation_predictor import correlate_and_predict
 from recommendation import generate_recommendation
 from utils import parse_chat_input
 from gemini_chat import chat_with_gemini  # new
+from compute_news_impact import news_impact
+
 
 load_dotenv()
 
@@ -50,18 +52,30 @@ if prompt := st.chat_input("Ask me about political news and stocks..."):
                     # 2. Sentiment analysis
                     sentiment_df = analyze_sentiment(news_df)
 
+                    # Compute impact score
+                    sentiment_df = news_impact(sentiment_df)
+
                     # 3. Get stock data if specified
                     if stock:
                         stock_df = get_stock_data(stock, start_date, end_date)
                         correlation, prediction = correlate_and_predict(sentiment_df, stock_df)
                         current_price = get_current_price(stock)
-                        suggestion = generate_recommendation(correlation, prediction, current_price)
+                        avg_impact = sentiment_df.loc[:, 'impact_score'].mean()
+                        suggestion = generate_recommendation(correlation, prediction, avg_impact,  current_price)
+
+                        top_news = sentiment_df.sort_values("impact_score", ascending=False).head(3)
+                        impact_lines = "\n".join(
+                            f"📰 {row['webTitle']} (impact score: {row['impact_score']:.2f})"
+                            for _, row in top_news.iterrows()
+                        )
 
                         response = (
                             f"✅ Found {len(news_df)} news articles about **{keyword}**.\n\n"
-                            f"📊 Correlation between sentiment and **{stock.upper()}** price: `{correlation:.2f}`\n"
-                            f"💡 Predicted price next week: `${prediction:.2f}`\n"
-                            f"📈 Recommendation: **{suggestion}**"
+                            f"📊 Correlation between sentiment and **{stock.upper()}** price: `{correlation:.2f}`\n\n"
+                            f"Average impact score is `{avg_impact:.2f}`\n\n"
+                            f"💡 Predicted price next week: `${prediction:.2f}`\n\n"
+                            f"📈 Recommendation: **{suggestion}**\n\n"
+                            f"🧠 **Top impactful articles:**\n{impact_lines}"
                         )
                     else:
                         response = (
